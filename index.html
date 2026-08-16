@@ -1,17 +1,22 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme:light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme:dark)">
 <title>대한민국 시군 인터랙티브 지도</title>
 <style>
 :root{
   --bg:#f6f7f9; --panel:#fff; --ink:#16181d; --muted:#6b7280; --line:#e3e6ea;
   --accent:#1f6feb; --shadow:0 1px 3px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.06);
+  --sheet-shadow:0 -6px 28px rgba(0,0,0,.16);
+  --safeT:env(safe-area-inset-top,0px); --safeB:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#0f1115; --panel:#171a20; --ink:#e8eaed; --muted:#9aa2ad; --line:#272b33;
-  --accent:#5a9bff; --shadow:0 1px 3px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.4);}}
+  --accent:#5a9bff; --shadow:0 1px 3px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.4);
+  --sheet-shadow:0 -6px 28px rgba(0,0,0,.6);}}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;overscroll-behavior:none}
 body{background:var(--bg);color:var(--ink);
   font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
   display:flex;overflow:hidden}
@@ -19,22 +24,24 @@ body{background:var(--bg);color:var(--ink);
 #svg{width:100%;height:100%;display:block;cursor:grab;touch-action:none}
 #svg.drag{cursor:grabbing}
 .region{stroke:#3a3d44;stroke-width:.45;vector-effect:non-scaling-stroke;transition:opacity .12s}
-.region:hover{opacity:.55}
 .region.sel{stroke:var(--accent);stroke-width:2.2}
-#bar{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:8px;
+@media (hover:hover){.region:hover{opacity:.55}}
+
+/* ── 툴바 ── */
+#bar{position:absolute;top:calc(12px + var(--safeT));left:12px;right:12px;display:flex;gap:8px;
   align-items:center;pointer-events:none;flex-wrap:wrap}
 #bar>*{pointer-events:auto}
 #search{width:230px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;
   background:var(--panel);color:var(--ink);box-shadow:var(--shadow);font-size:14px;outline:none}
 #search:focus{border-color:var(--accent)}
 .btn{padding:9px 13px;border:1px solid var(--line);border-radius:9px;background:var(--panel);
-  color:var(--ink);box-shadow:var(--shadow);font-size:13px;cursor:pointer}
+  color:var(--ink);box-shadow:var(--shadow);font-size:13px;cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--accent);color:var(--accent)}
 #hint{font-size:12px;color:var(--muted);background:var(--panel);padding:7px 11px;
   border-radius:9px;border:1px solid var(--line);box-shadow:var(--shadow)}
 #sug{position:absolute;top:46px;left:0;width:230px;max-height:320px;overflow:auto;
   background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);
-  display:none;z-index:5}
+  display:none;z-index:5;-webkit-overflow-scrolling:touch}
 #sug div{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line)}
 #sug div:last-child{border-bottom:0}
 #sug div:hover,#sug div.on{background:var(--accent);color:#fff}
@@ -43,18 +50,21 @@ body{background:var(--bg);color:var(--ink);
 #tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);
   border-radius:7px;padding:5px 9px;font-size:12.5px;box-shadow:var(--shadow);display:none;z-index:6;white-space:nowrap}
 #tip b{font-weight:600}#tip span{color:var(--muted);margin-left:5px}
+
+/* ── 패널 (데스크톱: 우측 고정) ── */
 #panel{width:390px;flex:none;background:var(--panel);border-left:1px solid var(--line);
   display:flex;flex-direction:column;box-shadow:var(--shadow);z-index:7}
-#panel.hide{display:none}
-#phead{padding:16px 18px 12px;border-bottom:1px solid var(--line);position:relative}
+#panel[data-state="hidden"]{display:none}
+#grab{display:none}
+#phead{padding:16px 18px 12px;border-bottom:1px solid var(--line);position:relative;flex:none}
 #pclose{position:absolute;top:12px;right:12px;border:0;background:transparent;color:var(--muted);
-  font-size:22px;line-height:1;cursor:pointer;padding:4px 8px;border-radius:6px}
+  font-size:22px;line-height:1;cursor:pointer;padding:4px 10px;border-radius:6px}
 #pclose:hover{background:var(--bg);color:var(--ink)}
 #psido{font-size:12px;color:var(--muted);letter-spacing:.02em}
 #pname{font-size:25px;font-weight:700;margin:3px 0 0;display:flex;align-items:baseline;gap:8px}
 #pkind{font-size:11px;font-weight:600;color:var(--accent);border:1px solid var(--accent);
   border-radius:5px;padding:1px 6px;letter-spacing:.03em}
-#pbody{flex:1;overflow-y:auto;padding:16px 18px 22px}
+#pbody{flex:1;overflow-y:auto;padding:16px 18px 22px;-webkit-overflow-scrolling:touch}
 #pflag{width:100%;aspect-ratio:3/2;object-fit:contain;background:#fff;border:1px solid var(--line);
   border-radius:9px;margin-bottom:12px}
 #pphoto{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:9px;border:1px solid var(--line);
@@ -67,12 +77,41 @@ body{background:var(--bg);color:var(--ink);
 .links a:hover{border-color:var(--accent);color:var(--accent);background:var(--bg)}
 .links img.ico{width:21px;height:21px;flex:none;object-fit:contain;display:block}
 .links .arw{margin-left:auto;color:var(--muted);font-size:12px}
-#pfoot{font-size:10.5px;color:var(--muted);padding:11px 18px;border-top:1px solid var(--line);line-height:1.55}
-@media(max-width:860px){
-  body{flex-direction:column}
-  #panel{width:100%;height:56%;border-left:0;border-top:1px solid var(--line)}
-  #mapwrap{height:44%}
-  #search{width:150px}#sug{width:150px}
+#pfoot{font-size:10.5px;color:var(--muted);padding:11px 18px;border-top:1px solid var(--line);line-height:1.55;flex:none}
+
+/* ── 모바일: 지도 전체화면 + 바텀시트 ── */
+@media (max-width:860px){
+  body{display:block;position:relative}
+  #mapwrap{position:fixed;inset:0;height:100dvh}
+  #search{width:100%;font-size:16px;padding:11px 13px}   /* 16px: iOS 자동 확대 방지 */
+  #sug{width:100%;top:50px}
+  #bar{gap:7px;flex-wrap:nowrap}
+  #bar>div:first-child{flex:1;min-width:0}
+  #hint{display:none}
+  .btn{padding:11px 13px}
+  #tip{display:none!important}
+
+  #panel{position:fixed;left:0;right:0;bottom:0;width:auto;height:92dvh;
+    border-left:0;border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;box-shadow:var(--sheet-shadow);
+    padding-bottom:var(--safeB);
+    transition:transform .32s cubic-bezier(.22,.61,.36,1);
+    will-change:transform;touch-action:none}
+  #panel.nosnap{transition:none}
+  #panel[data-state="hidden"]{display:flex;transform:translateY(100%);pointer-events:none}
+  #panel[data-state="peek"]{transform:translateY(56%)}
+  #panel[data-state="full"]{transform:translateY(0)}
+  /* 손잡이 */
+  #grab{display:block;padding:9px 0 3px;flex:none;cursor:grab;touch-action:none}
+  #grab i{display:block;width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto}
+  #phead{padding:6px 18px 12px}
+  #pclose{top:2px;right:10px;font-size:26px;padding:6px 12px}
+  #pname{font-size:22px}
+  #pbody{padding:14px 18px 26px}
+  /* peek 상태에서는 본문 스크롤을 잠가 시트 제스처와 충돌하지 않게 */
+  #panel[data-state="peek"] #pbody{overflow:hidden}
+  #pfoot{display:none}
+  #panel[data-state="full"] #pfoot{display:block}
 }
 </style></head><body>
 <div id="mapwrap">
@@ -90,7 +129,8 @@ body{background:var(--bg);color:var(--ink);
   </div>
   <div id="tip"></div>
 </div>
-<aside id="panel" class="hide">
+<aside id="panel" data-state="hidden">
+  <div id="grab"><i></i></div>
   <div id="phead">
     <button id="pclose" title="닫기 (Esc)">&times;</button>
     <div id="psido"></div>
@@ -106,7 +146,9 @@ const svg=document.getElementById('svg'), layer=document.getElementById('layer')
       defs=document.getElementById('defs'),
       tip=document.getElementById('tip'), panel=document.getElementById('panel'),
       pbody=document.getElementById('pbody'), pfoot=document.getElementById('pfoot'),
-      sug=document.getElementById('sug'), search=document.getElementById('search');
+      sug=document.getElementById('sug'), search=document.getElementById('search'),
+      grab=document.getElementById('grab');
+const isMobile=()=>matchMedia('(max-width:860px)').matches;
 let sel=null;
 
 // 패턴 타일은 '지역 전체 bbox'(bx,by,bw,bh) 크기로 잡는다.
@@ -121,86 +163,141 @@ for(const r of R){
 }
 defs.innerHTML=dh; layer.innerHTML=lh;
 
-// ── 뷰포트: vb=현재 표시, tgt=목표. 매 프레임 vb를 tgt로 지수 감쇠 보간해 부드럽게 ──
+/* ───────── 뷰포트: vb=현재 표시, tgt=목표. 매 프레임 지수 감쇠 보간 ───────── */
 let vb={x:0,y:0,w:1024,h:972};
 let tgt={x:0,y:0,w:1024,h:972};
-let raf=0;
+let raf=0, ease=0.20;
 const apply=()=>svg.setAttribute('viewBox',
   vb.x.toFixed(2)+' '+vb.y.toFixed(2)+' '+vb.w.toFixed(2)+' '+vb.h.toFixed(2));
 function clampT(){
   tgt.x=Math.max(-tgt.w*0.3,Math.min(1024-tgt.w*0.7,tgt.x));
   tgt.y=Math.max(-tgt.h*0.3,Math.min(972-tgt.h*0.7,tgt.y));
 }
-let ease=0.20;               // 드래그 중에는 더 빠르게 따라붙도록 올린다
 function tick(){
   const k=ease; let d=0;
   ['x','y','w','h'].forEach(function(p){
     const diff=tgt[p]-vb[p]; vb[p]+=diff*k; d+=Math.abs(diff);
   });
-  // 잔여 오차가 충분히 작아지면 목표값으로 스냅하고 정지
   if(d<0.05){vb.x=tgt.x;vb.y=tgt.y;vb.w=tgt.w;vb.h=tgt.h;apply();raf=0;return;}
   apply(); raf=requestAnimationFrame(tick);
 }
 function glide(){ if(!raf) raf=requestAnimationFrame(tick); }
-function zoomAt(cx,cy,k){
-  const nw=Math.min(1024,Math.max(18,tgt.w*k)), nh=nw*972/1024;
-  tgt.x=cx-(cx-tgt.x)*(nw/tgt.w); tgt.y=cy-(cy-tgt.y)*(nh/tgt.h);
-  tgt.w=nw; tgt.h=nh; clampT(); glide();
-}
-function toSvg(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;
-  return p.matrixTransform(svg.getScreenCTM().inverse());}
-svg.addEventListener('wheel',function(e){e.preventDefault();const p=toSvg(e);
-  zoomAt(p.x,p.y,e.deltaY>0?1.18:1/1.18);},{passive:false});
+function snapNow(){ if(raf){cancelAnimationFrame(raf);raf=0;}
+  vb.x=tgt.x;vb.y=tgt.y;vb.w=tgt.w;vb.h=tgt.h;apply(); }
 
-let drag=null;
+// preserveAspectRatio="xMidYMid meet" 를 감안한 클라이언트→SVG 좌표 변환.
+// 애니메이션 중인 vb 대신 임의의 viewBox 기준으로 계산할 수 있어야 앵커가 흔들리지 않는다.
+function fit(box){
+  const r=svg.getBoundingClientRect();
+  const sc=Math.min(r.width/box.w, r.height/box.h);
+  return {r:r, sc:sc, ox:(r.width-box.w*sc)/2, oy:(r.height-box.h*sc)/2};
+}
+function toSvgOf(box,cx,cy){
+  const f=fit(box);
+  return {x:(cx-f.r.left-f.ox)/f.sc+box.x, y:(cy-f.r.top-f.oy)/f.sc+box.y};
+}
+function zoomAt(cx,cy,k){
+  const a=toSvgOf(tgt,cx,cy);
+  const nw=Math.min(1024,Math.max(18,tgt.w*k)), nh=nw*972/1024;
+  const f=fit({x:0,y:0,w:nw,h:nh});
+  tgt.w=nw; tgt.h=nh;
+  tgt.x=a.x-(cx-f.r.left-f.ox)/f.sc;
+  tgt.y=a.y-(cy-f.r.top-f.oy)/f.sc;
+  clampT(); glide();
+}
+svg.addEventListener('wheel',function(e){e.preventDefault();
+  zoomAt(e.clientX,e.clientY,e.deltaY>0?1.18:1/1.18);},{passive:false});
+
+/* ───────── 포인터 제스처: 1점=이동, 2점=핀치 줌 ───────── */
+const pts=new Map();
+let gest=null;
+function startPan(id,x,y,hit){
+  gest={mode:'pan',id:id,x:x,y:y,ox:tgt.x,oy:tgt.y,moved:0,hit:hit,
+        lx:x,ly:y,t:performance.now(),velx:0,vely:0};
+  ease=0.35; svg.classList.add('drag');
+}
+function startPinch(){
+  const a=[...pts.values()];
+  const d0=Math.max(Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),1);
+  const mx=(a[0].x+a[1].x)/2, my=(a[0].y+a[1].y)/2;
+  gest={mode:'pinch', d0:d0, w0:tgt.w, anchor:toSvgOf(tgt,mx,my)};
+  tip.style.display='none'; svg.classList.add('drag');
+}
+function updatePinch(){
+  const a=[...pts.values()];
+  const d=Math.max(Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),1);
+  const mx=(a[0].x+a[1].x)/2, my=(a[0].y+a[1].y)/2;
+  const nw=Math.min(1024,Math.max(18,gest.w0*gest.d0/d)), nh=nw*972/1024;
+  const f=fit({x:0,y:0,w:nw,h:nh});
+  tgt.w=nw; tgt.h=nh;
+  tgt.x=gest.anchor.x-(mx-f.r.left-f.ox)/f.sc;
+  tgt.y=gest.anchor.y-(my-f.r.top-f.oy)/f.sc;
+  clampT(); snapNow();          // 핀치는 손가락에 즉시 붙어야 자연스럽다
+}
 svg.addEventListener('pointerdown',function(e){
-  // 포인터 캡처는 이후 이벤트를 svg로 재타게팅하므로,
-  // 클릭 대상은 반드시 pointerdown 시점에 기록해 둔다.
-  const hit=e.target.closest?e.target.closest('.region'):null;
-  drag={x:e.clientX,y:e.clientY,ox:tgt.x,oy:tgt.y,moved:0,hit:hit,
-        lx:e.clientX,ly:e.clientY,t:performance.now(),velx:0,vely:0};
-  ease=0.35;                       // 드래그 중엔 반응 우선
-  svg.setPointerCapture(e.pointerId); svg.classList.add('drag');});
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{svg.setPointerCapture(e.pointerId);}catch(_){}
+  if(pts.size===1){
+    // 포인터 캡처는 이후 이벤트를 svg로 재타게팅하므로,
+    // 클릭 대상은 반드시 pointerdown 시점에 기록해 둔다.
+    const hit=e.target.closest?e.target.closest('.region'):null;
+    startPan(e.pointerId,e.clientX,e.clientY,hit);
+  }else if(pts.size===2){ startPinch(); }
+});
 svg.addEventListener('pointermove',function(e){
-  if(drag){
-    const s=vb.w/svg.clientWidth;
-    drag.moved+=Math.abs(e.movementX)+Math.abs(e.movementY);
-    tgt.x=drag.ox-(e.clientX-drag.x)*s; tgt.y=drag.oy-(e.clientY-drag.y)*s;
+  if(pts.has(e.pointerId)) pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(gest&&gest.mode==='pinch'&&pts.size>=2){ updatePinch(); return; }
+  if(gest&&gest.mode==='pan'&&pts.has(gest.id)){
+    const f=fit(vb), s=1/f.sc;
+    gest.moved+=Math.abs(e.clientX-gest.lx)+Math.abs(e.clientY-gest.ly);
+    tgt.x=gest.ox-(e.clientX-gest.x)*s; tgt.y=gest.oy-(e.clientY-gest.y)*s;
     // 놓았을 때 관성에 쓸 속도(사용자 좌표/ms)를 지수 평활로 추적
-    const now=performance.now(), dt=Math.max(8,now-drag.t);
-    drag.velx=drag.velx*0.7 + (-(e.clientX-drag.lx)*s/dt)*0.3;
-    drag.vely=drag.vely*0.7 + (-(e.clientY-drag.ly)*s/dt)*0.3;
-    drag.lx=e.clientX; drag.ly=e.clientY; drag.t=now;
+    const now=performance.now(), dt=Math.max(8,now-gest.t);
+    gest.velx=gest.velx*0.7 + (-(e.clientX-gest.lx)*s/dt)*0.3;
+    gest.vely=gest.vely*0.7 + (-(e.clientY-gest.ly)*s/dt)*0.3;
+    gest.lx=e.clientX; gest.ly=e.clientY; gest.t=now;
     clampT(); glide(); return;
   }
-  const t=e.target.closest('.region');
-  if(t){const r=byCode[t.dataset.c];
-    tip.innerHTML='<b>'+r.n+'</b><span>'+r.s+'</span>';
-    tip.style.display='block';
-    const w=tip.offsetWidth, W=svg.clientWidth;
-    tip.style.left=Math.min(e.offsetX+14,W-w-8)+'px'; tip.style.top=(e.offsetY+16)+'px';
-  } else tip.style.display='none';
+  if(matchMedia('(hover:hover)').matches){
+    const t=e.target.closest('.region');
+    if(t){const r=byCode[t.dataset.c];
+      tip.innerHTML='<b>'+r.n+'</b><span>'+r.s+'</span>';
+      tip.style.display='block';
+      const w=tip.offsetWidth, W=svg.clientWidth;
+      tip.style.left=Math.min(e.offsetX+14,W-w-8)+'px'; tip.style.top=(e.offsetY+16)+'px';
+    } else tip.style.display='none';
+  }
 });
-addEventListener('pointerup',function(e){
-  svg.classList.remove('drag');
-  ease=0.20;
-  if(drag){
-    if(drag.moved<5){
-      if(drag.hit) select(drag.hit.dataset.c);
-      else close();
+function endPointer(e){
+  const wasPinch=gest&&gest.mode==='pinch';
+  pts.delete(e.pointerId);
+  if(wasPinch){
+    if(pts.size>=2){ startPinch(); return; }
+    if(pts.size===1){ const id=[...pts.keys()][0], p=pts.get(id); startPan(id,p.x,p.y,null); return; }
+    gest=null; ease=0.20; svg.classList.remove('drag'); return;
+  }
+  if(gest&&gest.mode==='pan'&&e.pointerId===gest.id){
+    svg.classList.remove('drag'); ease=0.20;
+    if(gest.moved<8){
+      if(gest.hit) select(gest.hit.dataset.c); else close();
     }else{
       // 손을 뗀 뒤 관성: 마지막 속도만큼 더 밀어 두고 이징이 감속을 담당.
       // 화면 절반을 넘지 않도록 상한을 둬서 과하게 미끄러지지 않게 한다.
-      const THROW=140, sp=Math.hypot(drag.velx,drag.vely);
+      const THROW=140, sp=Math.hypot(gest.velx,gest.vely);
       if(sp>0.01){
         const cap=Math.min(1,(vb.w*0.5)/(sp*THROW));
-        tgt.x+=drag.velx*THROW*cap; tgt.y+=drag.vely*THROW*cap; clampT(); glide();
+        tgt.x+=gest.velx*THROW*cap; tgt.y+=gest.vely*THROW*cap; clampT(); glide();
       }
     }
+    gest=null;
   }
-  drag=null;});
+}
+addEventListener('pointerup',endPointer);
+addEventListener('pointercancel',endPointer);
 svg.addEventListener('pointerleave',function(){tip.style.display='none';});
 
+/* ───────── 패널 / 바텀시트 ───────── */
+function setState(s){panel.dataset.state=s;}
 function esc(s){return (s||'').replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function select(c,fly){
@@ -221,18 +318,56 @@ function select(c,fly){
       '<a href="'+esc(r.wp)+'" target="_blank" rel="noopener"><img class="ico" src="icons/wikipedia.svg" alt="">Wikipedia<span class="arw">↗</span></a>'+
     '</div>';
   pfoot.textContent='소개글·사진: 한국어 Wikipedia / 깃발: 위키미디어 공용 · 제주도기 제공 / 경계: 통계청 시군구';
-  panel.classList.remove('hide');
-  if(fly){const b=sel.getBBox(); const m=Math.max(b.width,b.height)*0.7+8;
+  pbody.scrollTop=0;
+  setState(isMobile()?'peek':'shown');
+  if(fly){
+    const b=sel.getBBox(), m=Math.max(b.width,b.height)*0.7+8;
     tgt.w=Math.min(1024,Math.max(40,b.width+m*2)); tgt.h=tgt.w*972/1024;
-    tgt.x=b.x+b.width/2-tgt.w/2; tgt.y=b.y+b.height/2-tgt.h/2; clampT(); glide();}
+    tgt.x=b.x+b.width/2-tgt.w/2;
+    // 모바일은 바텀시트가 하단을 가리므로 대상을 화면 위쪽으로 올린다
+    tgt.y=b.y+b.height/2-tgt.h*(isMobile()?0.34:0.5);
+    clampT(); glide();
+  }
 }
-function close(){panel.classList.add('hide'); if(sel){sel.classList.remove('sel'); sel=null;}}
+function close(){setState('hidden'); if(sel){sel.classList.remove('sel'); sel=null;}}
 document.getElementById('pclose').onclick=close;
 document.getElementById('reset').onclick=function(){
   tgt={x:0,y:0,w:1024,h:972}; glide(); close();
   search.value='';sug.style.display='none';};
 addEventListener('keydown',function(e){if(e.key==='Escape'){close();sug.style.display='none';search.blur();}});
 
+// 바텀시트 손잡이 드래그: peek ↔ full ↔ 닫기
+(function(){
+  let sg=null;
+  const H=()=>panel.getBoundingClientRect().height;
+  function pct(){return panel.dataset.state==='full'?0:56;}
+  grab.addEventListener('pointerdown',function(e){
+    if(!isMobile()) return;
+    sg={y:e.clientY,base:pct(),moved:0};
+    panel.classList.add('nosnap');
+    try{grab.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  grab.addEventListener('pointermove',function(e){
+    if(!sg) return;
+    const dy=e.clientY-sg.y; sg.moved=Math.abs(dy);
+    const p=Math.max(0,Math.min(100,sg.base+dy/H()*100));
+    panel.style.transform='translateY('+p+'%)';
+  });
+  function endSheet(e){
+    if(!sg) return;
+    const dy=e.clientY-sg.y;
+    const p=Math.max(0,Math.min(100,sg.base+dy/H()*100));
+    panel.classList.remove('nosnap'); panel.style.transform='';
+    if(sg.moved<6){ setState(panel.dataset.state==='full'?'peek':'full'); }
+    else if(p>78) close();
+    else setState(p>28?'peek':'full');
+    sg=null;
+  }
+  grab.addEventListener('pointerup',endSheet);
+  grab.addEventListener('pointercancel',endSheet);
+})();
+
+/* ───────── 검색 ───────── */
 let hi=-1;
 function matches(q){q=q.trim(); if(!q) return [];
   return R.filter(function(r){return r.n.indexOf(q)>=0||r.s.indexOf(q)>=0;}).slice(0,40);}
@@ -243,7 +378,7 @@ function render(list){
   sug.style.display='block';
   Array.prototype.forEach.call(sug.children,function(d){d.onclick=function(){pick(d.dataset.c);};});
 }
-function pick(c){select(c,true); search.value=byCode[c].n; sug.style.display='none'; hi=-1;}
+function pick(c){select(c,true); search.value=byCode[c].n; sug.style.display='none'; hi=-1; search.blur();}
 search.addEventListener('input',function(){hi=-1;render(matches(search.value));});
 search.addEventListener('keydown',function(e){
   const list=matches(search.value);
@@ -253,6 +388,12 @@ search.addEventListener('keydown',function(e){
 });
 document.addEventListener('click',function(e){
   if(!e.target.closest('#search')&&!e.target.closest('#sug'))sug.style.display='none';});
+
+// 데스크톱↔모바일 전환 시 시트 상태 정합
+addEventListener('resize',function(){
+  if(panel.dataset.state==='hidden') return;
+  setState(isMobile()?'peek':'shown');
+});
 
 // 딥링크: #41110 또는 #순천시 로 바로 열기
 function fromHash(){
