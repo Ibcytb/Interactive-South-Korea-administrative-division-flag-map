@@ -96,20 +96,24 @@ body{background:var(--bg);color:var(--ink);
     border-radius:16px 16px 0 0;box-shadow:var(--sheet-shadow);
     padding-bottom:var(--safeB);
     transition:transform .32s cubic-bezier(.22,.61,.36,1);
-    will-change:transform;touch-action:none}
+    will-change:transform}
   #panel.nosnap{transition:none}
   #panel[data-state="hidden"]{display:flex;transform:translateY(100%);pointer-events:none}
   #panel[data-state="peek"]{transform:translateY(56%)}
   #panel[data-state="full"]{transform:translateY(0)}
-  /* 손잡이 */
-  #grab{display:block;padding:9px 0 3px;flex:none;cursor:grab;touch-action:none}
-  #grab i{display:block;width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto}
-  #phead{padding:6px 18px 12px}
-  #pclose{top:2px;right:10px;font-size:26px;padding:6px 12px}
+  /* 손잡이: 막대는 얇게 두되 판정 영역은 44px 이상 확보 */
+  #grab{display:flex;flex:none;cursor:grab;touch-action:none;
+    height:34px;align-items:center;justify-content:center}
+  #grab i{display:block;width:48px;height:5px;border-radius:3px;background:var(--line);
+    transition:background .15s,width .15s}
+  #grab:active i{background:var(--muted);width:60px}
+  /* 헤더 전체도 끌어올리는 영역 (닫기 버튼만 제외) */
+  #phead{padding:2px 18px 14px;touch-action:none}
+  #pclose{top:-28px;right:6px;font-size:26px;padding:10px 14px}
   #pname{font-size:22px}
-  #pbody{padding:14px 18px 26px}
-  /* peek 상태에서는 본문 스크롤을 잠가 시트 제스처와 충돌하지 않게 */
-  #panel[data-state="peek"] #pbody{overflow:hidden}
+  #pbody{padding:14px 18px 26px;touch-action:pan-y}
+  /* peek 상태에서는 본문 어디를 잡아도 끌어올릴 수 있게 */
+  #panel[data-state="peek"] #pbody{overflow:hidden;touch-action:none}
   #pfoot{display:none}
   #panel[data-state="full"] #pfoot{display:block}
 }
@@ -336,20 +340,27 @@ document.getElementById('reset').onclick=function(){
   search.value='';sug.style.display='none';};
 addEventListener('keydown',function(e){if(e.key==='Escape'){close();sug.style.display='none';search.blur();}});
 
-// 바텀시트 손잡이 드래그: peek ↔ full ↔ 닫기
+// 바텀시트 드래그: peek ↔ full ↔ 닫기
+// 판정 영역 = 손잡이 + 헤더 전체(닫기 버튼 제외), peek 상태에서는 본문까지.
 (function(){
   let sg=null;
   const H=()=>panel.getBoundingClientRect().height;
   function pct(){return panel.dataset.state==='full'?0:56;}
-  grab.addEventListener('pointerdown',function(e){
-    if(!isMobile()) return;
-    sg={y:e.clientY,base:pct(),moved:0};
+  function inZone(t){
+    if(!t||!t.closest) return false;
+    if(t.closest('#pclose')||t.closest('a')) return false;
+    if(t.closest('#grab')||t.closest('#phead')) return true;
+    return panel.dataset.state==='peek' && !!t.closest('#pbody');
+  }
+  panel.addEventListener('pointerdown',function(e){
+    if(!isMobile()||!inZone(e.target)) return;
+    sg={y:e.clientY,base:pct(),moved:0,tapZone:!!e.target.closest('#grab')||!!e.target.closest('#phead')};
     panel.classList.add('nosnap');
-    try{grab.setPointerCapture(e.pointerId);}catch(_){}
+    try{panel.setPointerCapture(e.pointerId);}catch(_){}
   });
-  grab.addEventListener('pointermove',function(e){
+  panel.addEventListener('pointermove',function(e){
     if(!sg) return;
-    const dy=e.clientY-sg.y; sg.moved=Math.abs(dy);
+    const dy=e.clientY-sg.y; sg.moved=Math.max(sg.moved,Math.abs(dy));
     const p=Math.max(0,Math.min(100,sg.base+dy/H()*100));
     panel.style.transform='translateY('+p+'%)';
   });
@@ -358,13 +369,16 @@ addEventListener('keydown',function(e){if(e.key==='Escape'){close();sug.style.di
     const dy=e.clientY-sg.y;
     const p=Math.max(0,Math.min(100,sg.base+dy/H()*100));
     panel.classList.remove('nosnap'); panel.style.transform='';
-    if(sg.moved<6){ setState(panel.dataset.state==='full'?'peek':'full'); }
+    if(sg.moved<8){
+      // 손잡이·헤더를 가볍게 탭하면 peek↔full 토글
+      if(sg.tapZone) setState(panel.dataset.state==='full'?'peek':'full');
+    }
     else if(p>78) close();
     else setState(p>28?'peek':'full');
     sg=null;
   }
-  grab.addEventListener('pointerup',endSheet);
-  grab.addEventListener('pointercancel',endSheet);
+  panel.addEventListener('pointerup',endSheet);
+  panel.addEventListener('pointercancel',endSheet);
 })();
 
 /* ───────── 검색 ───────── */
